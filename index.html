@@ -118,26 +118,20 @@
 				var loginTab = TabUI.add( "Login", "login-tab" );
 				var debugTab = TabUI.add( "Debug", "debug-tab" );
 				var levelTab = TabUI.add( "Levels", "level-tab" );
+				var editorTab = TabUI.add( "Editor", "editor-tab" );
 				var cameraTab = TabUI.add( "Camera", "camera-tab" );
 				var controlTab = TabUI.add( "Controls", "control-tab" );
 				var playersTab = TabUI.add( "Players", "players-tab" );
-				var materialTab = TabUI.add( "Material", "material-tab" );
+				var materialTab = TabUI.add( "Materials", "material-tab" );
 				var animationTab = TabUI.add( "Animations", "animation-tab" );
 
-				TabUI.append("Controls", "Camera", "Players", "Animations", "Material", "Levels", "Debug" );
-				TabUI.Debug.role.classList.add("active");
-				TabUI.Debug.tab.classList.add("in","active");
+				TabUI.append("Editor", "Controls", "Camera", "Players", "Animations", "Materials", "Levels", "Debug" );
+				TabUI.Editor.role.classList.add("active");
+				TabUI.Editor.tab.classList.add("in","active");
 
 			})();
 
 		</script>
-
-
-
-
-
-
-
 
 		<script>
 
@@ -230,7 +224,7 @@
 
 				world = new MW.World();
 
-				var x = 250, y = 250, z = 250;
+				var x = 500, y = 500, z = 500;
 				var min = new THREE.Vector3( -x, -y, -z );
 				var max = new THREE.Vector3(  x,  y,  z );
 				var partition = 5;
@@ -247,6 +241,20 @@
 					world.step( Math.min( delta, 0.02 ) );
 					scene.updateMatrixWorld();
 				})();
+
+			})();
+
+		//	Ground.
+
+			(function(){
+
+				ground = new THREE.Mesh(
+					new THREE.PlaneGeometry( 1000, 1000, 1, 1 ).rotateX(-Math.PI/2),
+					new THREE.MeshLambertMaterial({ color:0x829ec4, side:2, })
+				);
+
+				octree.importThreeMesh( ground );
+				groundID = ground.geometry.uuid;
 
 			})();
 
@@ -267,24 +275,24 @@
 
 			(function(){
 
-				var radius = 1;
+				var radius = 0.5;
 
 			//	local player.
 				localPlayer = (function(){
 					var player = new THREE.Object3D();
-					player.position.set( 0, 2, 0 );
+					player.position.set( 0, 0, 0 );
 					player.name = "localPlayer";
 					scene.add( player );
 					return player;
 				})();
 
 			//	Player helper.
-				localPlayerHelper = (function( radius ){
-					var sphere = new THREE.SphereGeometry( radius, 8, 6 );
+				localPlayerHelper = (function( r ){
+					var sphere = new THREE.SphereGeometry( r, 8, 6 );
 					var geometry = new THREE.EdgesGeometry( sphere );
 					var material = new THREE.LineBasicMaterial( { color: 0x00ff00 } );
 					var segments = new THREE.LineSegments( geometry, material );
-					segments.position.y = radius;
+				//	segments.position.y = r;
 					segments.name = "playerhelper";
 					return segments;
 				})( radius );
@@ -294,12 +302,13 @@
 			//	Player controller.
 				localPlayerController = (function( object, radius ){
 					var controller = new MW.CharacterController( object, radius );
-					controller.movementSpeed = 10;
+					controller.movementSpeed = 20;
 					controller.maxSlopeGradient = 0.5;
+					controller.center.set(0, 1, 0);
 					return controller;
 				})( localPlayer, radius );
 
-			//	world.add( localPlayerController );
+				world.add( localPlayerController );
 
 			//	Take CameraLight control.
 				cameraLight.target = localPlayer;
@@ -309,6 +318,359 @@
 					requestAnimationFrame( update );
 					localPlayer.rotation.y = localPlayerController.direction + Math.PI;
 				})();
+
+			})();
+
+		//	Camera controls.
+
+			(function(){
+
+				cameraControls = new MW.TPSCameraControl(
+					camera, 			// three.js camera.
+					localPlayer,		// tracking object.
+					{	
+						el: renderer.domElement,
+						offset: new THREE.Vector3( 0, 0, 0 ), // eye height.
+						radius: 4, // default distance of the character to the camera.
+						minRadius: 2,
+						maxRadius: +Infinity,
+						rigidObjects: [],
+					}
+				);
+
+				(function update(){
+					requestAnimationFrame( update );
+					cameraControls.update();
+				})();
+
+			})();
+
+		//	keyInputControls.
+
+			(function(){
+
+				keyInputControls = new MW.KeyInputControl();
+
+				keyInputControls.addEventListener( "movekeyon", function () { 
+					localPlayerController.isRunning = true; 
+				});
+
+				keyInputControls.addEventListener( "movekeyoff", function () { 
+					localPlayerController.isRunning = false; 
+				});
+
+				keyInputControls.addEventListener( "jumpkeypress", function () { 
+					localPlayerController.jump(); 
+				});
+
+			// synch with keybord input and camera control input.
+				keyInputControls.addEventListener( "movekeychange",  function () {
+					var cameraFrontAngle = cameraControls.getFrontAngle();
+					var characterFrontAngle = keyInputControls.frontAngle;
+					localPlayerController.direction = THREE.Math.degToRad( 360 ) - cameraFrontAngle + characterFrontAngle;
+				});
+
+			})();
+
+		//	joystickControls.
+
+			(function(){
+
+				var joystick1, joystick2;
+
+				var joysticControls1 = document.createElement( "div" );
+				joysticControls1.id = "joystick-controls-1";
+				joysticControls1.classList.add("joystick-controls");
+				document.body.appendChild( joysticControls1 );
+
+				var joysticControls2 = document.createElement( "div" );
+				joysticControls2.id = "joystick-controls-2";
+				joysticControls2.classList.add("joystick-controls");
+				document.body.appendChild( joysticControls2 );
+
+				var joystick1Selector  = "#joystick1";
+				var joystick2Selector  = "#joystick2";
+				var jumpButtonSelector = "#jumpButton";
+
+				var joystickControlsSelector  = ".joystick-controls";
+				var joystickControls1Selector = "#joystick-controls-1";
+				var joystickControls2Selector = "#joystick-controls-2";
+
+				joystick1  = new virtualInput.Joystick( $( joystickControls1Selector ), 94, { id: "joystick1" } );
+				joystick2  = new virtualInput.Joystick( $( joystickControls2Selector ), 94, { id: "joystick2" } );
+				jumpButton = new virtualInput.Button(   $( joystickControls1Selector ), 58, { id: "jumpButton", label: "<b>JUMP</b>" } ); // buttonSvgSrc
+
+				joystick2.addEventListener( "active", function onActive() { 
+
+					if (  localPlayerController.isJumping 
+						|| !localPlayerController.isGrounded 
+						|| localPlayerController.isOnSlope ) {
+						return;
+					}
+
+					localPlayerController.isRunning = true;
+
+				});
+
+				joystick2.addEventListener( "disactive", function onDisactive() { 
+
+					if (  localPlayerController.isJumping 
+						|| !localPlayerController.isGrounded 
+						||  localPlayerController.isOnSlope ) {
+						return;
+					}
+
+					localPlayerController.isRunning = false;
+
+				});
+
+				jumpButton.addEventListener( "press", function onPress() { 
+
+					if (  localPlayerController.isJumping 
+						|| !localPlayerController.isGrounded 
+						|| localPlayerController.isOnSlope ) {
+						return;
+					}
+
+					localPlayerController.jump();
+
+				});
+
+				joystick2.update = function(){
+
+					if ( this.isActive ) {
+
+						localPlayerController.direction = (3 * Math.PI/2) - cameraControls.getFrontAngle() + this.angle;
+
+					}
+				};
+
+				joystick1.update = function(){
+
+					if ( this.isActive ) {
+
+						cameraControls.setLatLon(
+							cameraControls.lat + this.position.y * 0.5, // deg.
+							cameraControls.lon - this.position.x        // deg.
+						);
+
+					}
+				};
+
+				(function update(){
+					requestAnimationFrame( update );
+					joystick1.update();
+					joystick2.update();
+				})();
+				
+			})();
+
+		</script>
+
+		<script>
+
+		//	world.
+
+			(function(){
+
+				var loader = new THREE.GLTFLoader();
+				loader.load("/clone-7/assets/world.glb", function( object ){
+					debugMode && console.log( "world:", object );
+
+				//	var camera = object.camera;
+				//	var parser = object.parser;
+				//	var scene  = object.scene;
+				//	var scenes = object.scenes;
+				//	var userData = object.userData;
+				//	var animations = object.animations;
+
+					var s = 0.7;
+					var offset = -10.37;
+					group = new THREE.Group();
+					group.name = "world";
+					group.scale.set(s,s,s);
+					group.position.y = offset;
+					group.add.apply( group, object.scene.children );
+
+					var entities = {};
+					group.children.forEach(function(child, i){
+						if ( child.type === "Mesh" ) {
+							var name = child.name || child.uuid;
+							entities[ name ] = child.id;
+						}
+					}); 
+					debugMode && console.log( "entities", entities );
+
+					scene.add( group );
+					group.visible = false;
+				});
+
+			})();
+
+		</script>
+
+		<script>
+
+		//	Boxman.
+
+			(function(){
+
+				var loader = new THREE.GLTFLoader();
+				loader.load("/clone-7/assets/boxman.glb", function( object ){
+					debugMode && console.log( "boxman:", object );
+
+					var animations = object.animations;
+					debugMode && console.log( animations );
+
+					var entities = {};
+					animations.forEach(function( clip ){
+						entities[ clip.name ] = clip.uuid;
+					}); 
+					debugMode && console.log( "entities", entities );
+
+					var player = object.scene.children[0];
+					localPlayer.add( player );
+					player.position.y = -0.55;
+
+				//	Animation controller.
+					var mesh = player.children[0];
+					mesh.animations = animations;
+					debugMode && console.log( mesh );
+					animationController = new MW.AnimationController( mesh );
+					animationController.play("idle");
+					localPlayerController.movementSpeed = 3;
+
+				//	Bind character controller animation.
+					localPlayerController.addEventListener( "startIdling",  function () { 
+						animationController.play( "idle" );
+					});
+					localPlayerController.addEventListener( "startWalking",  function () { 
+						animationController.play( "run" );
+					});
+					localPlayerController.addEventListener( "startSliding", function () { 
+						animationController.play( "falling" );
+					});
+					localPlayerController.addEventListener( "startFalling", function () { 
+						animationController.play( "falling" );
+					});
+					localPlayerController.addEventListener( "startJumping", function() { 
+						if ( localPlayerController.isRunning ) {
+							animationController.motion["jump_running"].reset();
+							animationController.motion["jump_running"].setDuration(1.1);
+							animationController.play( "jump_running" );
+						} else {
+							animationController.motion["jump_idle"].reset();
+							animationController.motion["jump_idle"].setDuration(1.1);
+							animationController.play( "jump_idle" );
+						}
+					});
+
+				//	Skeleton helper (debug).
+					skeletonHelper = new THREE.SkeletonHelper( mesh );
+					scene.add( skeletonHelper );
+					debugMode && console.log( skeletonHelper );
+
+				//	Start animation controller.
+					var clock = new THREE.Clock();
+					(function update(){
+						requestAnimationFrame( update );
+						var delta = clock.getDelta();
+						animationController.update( delta );
+					})();
+
+					localPlayerHelper.visible = false;
+				});
+
+			})();
+
+		</script>
+
+		<script>
+
+		//	Car.
+
+			(function(){
+
+				var loader = new THREE.GLTFLoader();
+				loader.load("/clone-7/assets/car.glb", function( object ){
+					debugMode && console.log( "car:", object );
+
+				//	var animations = object.animations;
+				//	debugMode && console.log( animations );
+
+					var s = 1;
+					car = new THREE.Object3D();
+					car.name = "car";
+					car.scale.set(s,s,s);
+					car.position.set(0, 0.3, -3);
+					scene.add( car );
+
+					car.add.apply( car, object.scene.children );
+					
+					car.children.forEach(function(child){
+						if ( child.name.includes("Sphere") 
+						  || child.name.includes("Cube") )
+							child.visible = false;
+					});
+
+					var entities = {};
+					car.children.forEach(function(child, i){
+						if ( child.type === "Mesh" ) {
+							var name = child.name || child.uuid;
+							entities[ name ] = child.id;
+						}
+					}); 
+					debugMode && console.log( "entities", entities );
+
+					var radius = 0.4;
+
+				//	Car helper.
+					carHelper = (function( r ){
+						var box = new THREE.BoxGeometry(r, r, 2*r);
+						var geometry = new THREE.EdgesGeometry( box );
+						var material = new THREE.LineBasicMaterial( { color: 0x00ff00 } );
+						var segments = new THREE.LineSegments( geometry, material );
+						segments.position.y = 0.3;
+						segments.name = "carhelper";
+						return segments;
+					})( 1.3 );
+
+					car.add( carHelper );
+
+				//	Player controller.
+				//	carController = (function( object, radius ){
+				//		var controller = new MW.CharacterController( object, radius );
+				//	})( car, radius );
+
+					takeCarControls = function (){
+						localPlayerController.object = car;
+						localPlayerController.movementSpeed = 10;
+						localPlayerController.maxSlopeGradient = 0.5;
+						cameraControls.trackObject = car;
+						cameraLight.target = car;
+						//	Update rotation.
+						(function update(){
+							car.requestFrameID = requestAnimationFrame( update );
+							car.rotation.y = localPlayerController.direction + Math.PI;
+						})();
+
+						
+					}
+
+
+
+
+
+
+
+
+				//	Update rotation.
+				//	(function update(){
+				//		requestAnimationFrame( update );
+				//		car.rotation.y = carController.direction + Math.PI;
+				//	})();
+
+				});
 
 			})();
 
