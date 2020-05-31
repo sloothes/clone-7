@@ -95,6 +95,42 @@
 		<script src="/threejs/r96/examples/js/exporters/OBJExporter.js"></script>
 		<script src="/threejs/r96/examples/js/exporters/ColladaExporter.js"></script>
 
+		<script>
+
+			debugMode = true;
+			MW.install( THREE );
+
+			Number.prototype.format = function (){
+				return this.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1,");
+			};
+
+		</script>
+
+		<script>
+
+		//	TabUI.
+
+			(function(){
+
+				var sidePanel = createSidePanel();
+				document.body.appendChild( sidePanel );
+
+				var loginTab = TabUI.add( "Login", "login-tab" );
+				var debugTab = TabUI.add( "Debug", "debug-tab" );
+				var levelTab = TabUI.add( "Levels", "level-tab" );
+				var cameraTab = TabUI.add( "Camera", "camera-tab" );
+				var controlTab = TabUI.add( "Controls", "control-tab" );
+				var playersTab = TabUI.add( "Players", "players-tab" );
+				var materialTab = TabUI.add( "Material", "material-tab" );
+				var animationTab = TabUI.add( "Animations", "animation-tab" );
+
+				TabUI.append("Controls", "Camera", "Players", "Animations", "Material", "Levels", "Debug" );
+				TabUI.Debug.role.classList.add("active");
+				TabUI.Debug.tab.classList.add("in","active");
+
+			})();
+
+		</script>
 
 
 
@@ -103,11 +139,180 @@
 
 
 
+		<script>
 
+		//	Scene.
 
+			scene = new THREE.Scene();
 
+		//	Camera.
 
+			(function(){
 
+				var aspect = (window.innerWidth - 370) / window.innerHeight;
+				camera = new THREE.PerspectiveCamera( 50, aspect, 1, 10000 );
+				camera.position.set(0, 2, 10);
+
+			})();
+
+		//  Camera Light.
+
+			(function(){
+
+				cameraLight = new THREE.DirectionalLight( 0xdfebff, 0.75 );
+				cameraLight.position.set( 0, 500, 300 );
+				cameraLight.castShadow = true;
+				cameraLight.shadow.mapSize.width  = Math.pow(2, 10); // 2048;
+				cameraLight.shadow.mapSize.height = Math.pow(2, 10); // 2048;
+
+				var d = 30;
+				cameraLight.shadow.camera.left = - d;
+				cameraLight.shadow.camera.right = d;
+				cameraLight.shadow.camera.top = d;
+				cameraLight.shadow.camera.bottom = - d;
+				cameraLight.shadow.camera.far = 10000;
+
+				shadowHelper = new THREE.CameraHelper(cameraLight.shadow.camera);
+				shadowHelper.visible = false;
+
+				scene.add( cameraLight, shadowHelper  );
+
+				(function update(){
+					requestAnimationFrame( update );
+					cameraLight.position.copy( camera.position );
+				})();
+
+			})();
+
+		//  Renderer.
+
+			(function(){
+
+				renderer = new THREE.WebGLRenderer({
+					antialias: true,
+					preserveDrawingBuffer: true,
+				});
+
+				renderer.gammaInput = true;
+				renderer.gammaOutput = true;
+				renderer.shadowMap.enabled = true;
+				renderer.setClearColor( 0x000000 );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( (window.innerWidth - 370), window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+				window.addEventListener("resize", function onWindowResize() {
+					renderer.setSize( (window.innerWidth - 370), window.innerHeight );
+				});
+
+				window.addEventListener("resize", function onWindowResize() {
+					camera.aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
+					camera.updateProjectionMatrix();
+				});
+
+				mouse = new THREE.Vector2();
+
+				renderer.domElement.addEventListener("mousemove", function(e) {
+					mouse.x = ( e.clientX / this.clientWidth ) * 2 - 1;
+					mouse.y = - ( e.clientY / this.clientHeight ) * 2 + 1;
+				});
+
+				(function render(){
+					requestAnimationFrame( render );
+					renderer.render( scene, camera );
+				})();
+
+			})();
+
+		//	World.
+
+			(function(){
+
+				world = new MW.World();
+
+				var x = 250, y = 250, z = 250;
+				var min = new THREE.Vector3( -x, -y, -z );
+				var max = new THREE.Vector3(  x,  y,  z );
+				var partition = 5;
+
+				octree = new MW.Octree( min, max, partition );
+				world.add( octree );
+
+				var clock = new THREE.Clock();
+
+				(function update(){
+					requestAnimationFrame( update );
+					var delta = clock.getDelta();
+					var elapsed = clock.getElapsedTime();
+					world.step( Math.min( delta, 0.02 ) );
+					scene.updateMatrixWorld();
+				})();
+
+			})();
+
+		//	Ground Helper.
+
+			(function(){
+
+				groundHelper = new THREE.GridHelper( 500, 500, 0x444444, 0x444444 );
+				scene.add( groundHelper );
+
+			})();
+
+		</script>
+
+		<script>
+
+		//	localPlayer Controller.
+
+			(function(){
+
+				var radius = 1;
+
+			//	local player.
+				localPlayer = (function(){
+					var player = new THREE.Object3D();
+					player.position.set( 0, 2, 0 );
+					player.name = "localPlayer";
+					scene.add( player );
+					return player;
+				})();
+
+			//	Player helper.
+				localPlayerHelper = (function( radius ){
+					var sphere = new THREE.SphereGeometry( radius, 8, 6 );
+					var geometry = new THREE.EdgesGeometry( sphere );
+					var material = new THREE.LineBasicMaterial( { color: 0x00ff00 } );
+					var segments = new THREE.LineSegments( geometry, material );
+					segments.position.y = radius;
+					segments.name = "playerhelper";
+					return segments;
+				})( radius );
+
+				localPlayer.add( localPlayerHelper );
+
+			//	Player controller.
+				localPlayerController = (function( object, radius ){
+					var controller = new MW.CharacterController( object, radius );
+					controller.movementSpeed = 10;
+					controller.maxSlopeGradient = 0.5;
+					return controller;
+				})( localPlayer, radius );
+
+			//	world.add( localPlayerController );
+
+			//	Take CameraLight control.
+				cameraLight.target = localPlayer;
+
+			//	Update rotation.
+				(function update(){
+					requestAnimationFrame( update );
+					localPlayer.rotation.y = localPlayerController.direction + Math.PI;
+				})();
+
+			})();
+
+		</script>
 
 	</body>
 </html>
