@@ -588,6 +588,14 @@
 							child.visible = false;
 					});
 
+					(function(r){
+						var geom = new THREE.BoxGeometry(r, r, 2*r);
+						var mesh = new THREE.Mesh(geom);
+						mesh.position.copy( car.position );
+						mesh.position.y = r/2;
+						octree.importThreeMesh( mesh );
+					})( 1.3 );
+
 				//	Car helper.
 					carHelper = (function( r ){
 						var box = new THREE.BoxGeometry(r, r, 2*r);
@@ -596,6 +604,10 @@
 						var segments = new THREE.LineSegments( geometry, material );
 						segments.position.y = 0.3;
 						segments.name = "carhelper";
+						var mesh = new THREE.Mesh(box);
+						mesh.position.copy( car.position );
+						mesh.position.y = r/2;
+						octree.importThreeMesh( mesh );
 						return segments;
 					})( 1.3 );
 
