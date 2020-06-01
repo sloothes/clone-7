@@ -129,9 +129,6 @@
 				TabUI.Editor.role.classList.add("active");
 				TabUI.Editor.tab.classList.add("in","active");
 
-				TabUI.Editor.tab.textContent = "Shift+V: show/hide world."
-				TabUI.Editor.tab.style.cssText = "font-size:x-large;font-weight:bold;"
-
 			})();
 
 		</script>
@@ -333,14 +330,12 @@
 					{	
 						el: renderer.domElement,
 						offset: new THREE.Vector3( 0, 0, 0 ), // eye height.
-						radius: 6, // default distance of the character to the camera.
+						radius: 4, // default distance of the character to the camera.
 						minRadius: 2,
 						maxRadius: +Infinity,
 						rigidObjects: [],
 					}
 				);
-
-				cameraControls.setLatLon(30, 220); // deg.
 
 				(function update(){
 					requestAnimationFrame( update );
@@ -490,19 +485,25 @@
 					group.add.apply( group, object.scene.children );
 					group.updateMatrixWorld();
 
-					scene.add( group );
-					group.visible = false;
-
-					window.addEventListener("keyup", function(e){
-						if ( e.shiftKey && e.key === "V" ) {
-							group.visible = !group.visible;
-							groundHelper.visible = !group.visible;
+					var entities = {};
+					group.children.forEach(function(child, i){
+						if ( child.type === "Mesh" ) {
+							var name = child.name || child.uuid;
+							entities[ name ] = child.id;
 						}
 					});
 
+					debugMode && console.log( "entities", entities );
+
+					scene.add( group );
+					group.visible = false;
 				});
 
 			})();
+
+		</script>
+
+		<script>
 
 		//	Boxman.
 
@@ -513,19 +514,26 @@
 					debugMode && console.log( "boxman:", object );
 
 					var animations = object.animations;
+					debugMode && console.log( animations );
+
+					var entities = {};
+					animations.forEach(function( clip ){
+						entities[ clip.name ] = clip.uuid;
+					}); 
+
+					debugMode && console.log( "entities", entities );
 
 					var player = object.scene.children[0];
 					localPlayer.add( player );
 					player.position.y = -0.55;
 
-					localPlayerController.movementSpeed = 3.3;
-
 				//	Animation controller.
 					var mesh = player.children[0];
 					mesh.animations = animations;
-
+					debugMode && console.log( mesh );
 					animationController = new MW.AnimationController( mesh );
 					animationController.play("idle");
+					localPlayerController.movementSpeed = 3;
 
 				//	Bind character controller animation.
 					localPlayerController.addEventListener( "startIdling",  function () { 
@@ -552,6 +560,11 @@
 						}
 					});
 
+				//	Skeleton helper (debug).
+					skeletonHelper = new THREE.SkeletonHelper( mesh );
+					scene.add( skeletonHelper );
+					debugMode && console.log( skeletonHelper );
+
 				//	Start animation controller.
 					var clock = new THREE.Clock();
 					(function update(){
@@ -565,6 +578,10 @@
 
 			})();
 
+		</script>
+
+		<script>
+
 		//	Car.
 
 			(function(){
@@ -572,6 +589,9 @@
 				var loader = new THREE.GLTFLoader();
 				loader.load("/clone-7/assets/car.glb", function( object ){
 					debugMode && console.log( "car:", object );
+
+				//	var animations = object.animations;
+				//	debugMode && console.log( animations );
 
 					var s = 1;
 					car = new THREE.Object3D();
@@ -588,6 +608,17 @@
 							child.visible = false;
 					});
 
+					var entities = {"car": car.id};
+					car.children.forEach(function(child, i){
+						if ( child.type === "Mesh" ) {
+							var name = child.name || child.uuid;
+							entities[ name ] = child.id;
+						}
+					}); 
+					debugMode && console.log( "entities", entities );
+
+					var radius = 0.4;
+
 				//	Car helper.
 					carHelper = (function( r ){
 						var box = new THREE.BoxGeometry(r, r, 2*r);
@@ -601,24 +632,42 @@
 
 					car.add( carHelper );
 
+				//	Player controller.
+				//	carController = (function( object, radius ){
+				//		var controller = new MW.CharacterController( object, radius );
+				//	})( car, radius );
+
+					takeControls = function (object, speed){
+						cameraLight.target = object;
+						cameraControls.trackObject = object;
+						localPlayerController.center.copy( object.position );
+						localPlayerController.object = object;
+						localPlayerController.maxSlopeGradient = 0.5;
+						if ( speed != null ) 
+							localPlayerController.movementSpeed = speed;
+					//	Update rotation.
+						(function update(){
+							object.requestFrameID = requestAnimationFrame( update );
+							object.rotation.y = localPlayerController.direction + Math.PI;
+						})();
+					};
+
+
+
+
+
+
+
+
+				//	Update rotation.
+				//	(function update(){
+				//		requestAnimationFrame( update );
+				//		car.rotation.y = carController.direction + Math.PI;
+				//	})();
+
 				});
 
 			})();
-
-		//	function takeControls(object, speed){
-		//		cameraLight.target = object;
-		//		cameraControls.trackObject = object;
-		//		localPlayerController.center.copy( object.position );
-		//		localPlayerController.object = object;
-		//		localPlayerController.maxSlopeGradient = 0.5;
-		//		if ( speed != null ) 
-		//			localPlayerController.movementSpeed = speed;
-		//		//	Update rotation.
-		//		(function update(){
-		//			object.requestFrameID = requestAnimationFrame( update );
-		//			object.rotation.y = localPlayerController.direction + Math.PI;
-		//		})();
-		//	};
 
 		</script>
 
